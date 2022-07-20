@@ -157,6 +157,11 @@ class BaseUserManager(Generic[models.UC, models.UD]):
 
         return created_user
 
+    async def extract_account_email(
+        self, oauth_account: models.BaseOAuthAccount
+    ) -> str:
+        return oauth_account.account_email
+
     async def oauth_callback(
         self, oauth_account: models.BaseOAuthAccount, request: Optional[Request] = None
     ) -> models.UD:
@@ -181,16 +186,17 @@ class BaseUserManager(Generic[models.UC, models.UD]):
                 oauth_account.oauth_name, oauth_account.account_id
             )
         except UserNotExists:
+            account_email = await self.extract_account_email(oauth_account)
             try:
                 # Link account
-                user = await self.get_by_email(oauth_account.account_email)
+                user = await self.get_by_email(account_email)
                 user.oauth_accounts.append(oauth_account)  # type: ignore
                 await self.user_db.update(user)
             except UserNotExists:
                 # Create account
                 password = generate_password()
                 user = self.user_db_model(
-                    email=oauth_account.account_email,
+                    email=account_email,
                     hashed_password=get_password_hash(password),
                     oauth_accounts=[oauth_account],
                 )
